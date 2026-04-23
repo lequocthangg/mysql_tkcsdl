@@ -1,0 +1,216 @@
+-- Cinema management database
+-- Source of truth: final BCNF schema in CHUAN HOA.docx
+
+SET NAMES utf8mb4;
+
+DROP DATABASE IF EXISTS QuanLyRapChieuPhimDB;
+CREATE DATABASE QuanLyRapChieuPhimDB
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE QuanLyRapChieuPhimDB;
+
+CREATE TABLE MOVIE (
+    MaPhim VARCHAR(10) PRIMARY KEY,
+    TenPhim VARCHAR(150) NOT NULL,
+    TheLoai VARCHAR(100) NOT NULL,
+    ThoiLuong INT NOT NULL,
+    NgayKhoiChieu DATE NOT NULL,
+    MoTa TEXT,
+    CONSTRAINT CK_MOVIE_ThoiLuong CHECK (ThoiLuong > 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE ROOM (
+    MaPhong VARCHAR(10) PRIMARY KEY,
+    TenPhong VARCHAR(100) NOT NULL,
+    LoaiPhong VARCHAR(30) NOT NULL,
+    SucChua INT NOT NULL,
+    CONSTRAINT CK_ROOM_SucChua CHECK (SucChua > 0)
+) ENGINE=InnoDB;
+
+CREATE TABLE SEAT (
+    MaGhe VARCHAR(10) PRIMARY KEY,
+    MaPhong VARCHAR(10) NOT NULL,
+    HangGhe VARCHAR(5) NOT NULL,
+    SoGhe INT NOT NULL,
+    CONSTRAINT UQ_SEAT_Phong_Hang_So UNIQUE (MaPhong, HangGhe, SoGhe),
+    CONSTRAINT CK_SEAT_SoGhe CHECK (SoGhe > 0),
+    CONSTRAINT FK_SEAT_ROOM FOREIGN KEY (MaPhong) REFERENCES ROOM(MaPhong)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE SHOWTIME (
+    MaSuat VARCHAR(10) PRIMARY KEY,
+    MaPhim VARCHAR(10) NOT NULL,
+    MaPhong VARCHAR(10) NOT NULL,
+    ThoiGianBatDau DATETIME NOT NULL,
+    ThoiGianKetThuc DATETIME NOT NULL,
+    CONSTRAINT CK_SHOWTIME_ThoiGian CHECK (ThoiGianKetThuc > ThoiGianBatDau),
+    CONSTRAINT FK_SHOWTIME_MOVIE FOREIGN KEY (MaPhim) REFERENCES MOVIE(MaPhim)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+    CONSTRAINT FK_SHOWTIME_ROOM FOREIGN KEY (MaPhong) REFERENCES ROOM(MaPhong)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE CUSTOMER (
+    MaKH VARCHAR(10) PRIMARY KEY,
+    HoTen VARCHAR(100) NOT NULL,
+    SoDienThoai VARCHAR(20) NOT NULL,
+    Email VARCHAR(100) NOT NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE TICKET (
+    MaVe VARCHAR(10) PRIMARY KEY,
+    MaKH VARCHAR(10) NOT NULL,
+    MaSuat VARCHAR(10) NOT NULL,
+    MaGhe VARCHAR(10) NOT NULL,
+    NgayDat DATETIME NOT NULL,
+    TrangThai VARCHAR(30) NOT NULL,
+    GiaVe DECIMAL(12, 2) NOT NULL,
+    CONSTRAINT UQ_TICKET_Suat_Ghe UNIQUE (MaSuat, MaGhe),
+    CONSTRAINT CK_TICKET_GiaVe CHECK (GiaVe >= 0),
+    CONSTRAINT CK_TICKET_TrangThai CHECK (TrangThai IN ('DaDat', 'DaThanhToan', 'DaHuy')),
+    CONSTRAINT FK_TICKET_CUSTOMER FOREIGN KEY (MaKH) REFERENCES CUSTOMER(MaKH)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+    CONSTRAINT FK_TICKET_SHOWTIME FOREIGN KEY (MaSuat) REFERENCES SHOWTIME(MaSuat)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+    CONSTRAINT FK_TICKET_SEAT FOREIGN KEY (MaGhe) REFERENCES SEAT(MaGhe)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE PAYMENT (
+    MaThanhToan VARCHAR(10) PRIMARY KEY,
+    MaVe VARCHAR(10) NOT NULL,
+    PhuongThuc VARCHAR(30) NOT NULL,
+    ThoiGianThanhToan DATETIME NOT NULL,
+    CONSTRAINT UQ_PAYMENT_MaVe UNIQUE (MaVe),
+    CONSTRAINT CK_PAYMENT_PhuongThuc CHECK (PhuongThuc IN ('TienMat', 'The', 'ChuyenKhoan', 'ViDienTu')),
+    CONSTRAINT FK_PAYMENT_TICKET FOREIGN KEY (MaVe) REFERENCES TICKET(MaVe)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE INDEX IX_SEAT_MaPhong ON SEAT(MaPhong);
+CREATE INDEX IX_SHOWTIME_MaPhim ON SHOWTIME(MaPhim);
+CREATE INDEX IX_SHOWTIME_MaPhong ON SHOWTIME(MaPhong);
+CREATE INDEX IX_TICKET_MaKH ON TICKET(MaKH);
+CREATE INDEX IX_TICKET_MaGhe ON TICKET(MaGhe);
+CREATE INDEX IX_PAYMENT_MaVe ON PAYMENT(MaVe);
+
+DROP TRIGGER IF EXISTS TRG_TICKET_VALIDATE_ROOM_BEFORE_INSERT;
+DROP TRIGGER IF EXISTS TRG_TICKET_VALIDATE_ROOM_BEFORE_UPDATE;
+
+DELIMITER $$
+
+CREATE TRIGGER TRG_TICKET_VALIDATE_ROOM_BEFORE_INSERT
+BEFORE INSERT ON TICKET
+FOR EACH ROW
+BEGIN
+    DECLARE vMaPhongSuat VARCHAR(10);
+    DECLARE vMaPhongGhe VARCHAR(10);
+
+    SELECT MaPhong INTO vMaPhongSuat
+    FROM SHOWTIME
+    WHERE MaSuat = NEW.MaSuat;
+
+    SELECT MaPhong INTO vMaPhongGhe
+    FROM SEAT
+    WHERE MaGhe = NEW.MaGhe;
+
+    IF vMaPhongSuat IS NULL OR vMaPhongGhe IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'MaSuat hoac MaGhe khong ton tai.';
+    END IF;
+
+    IF vMaPhongSuat <> vMaPhongGhe THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Ghe khong thuoc phong cua suat chieu.';
+    END IF;
+END$$
+
+CREATE TRIGGER TRG_TICKET_VALIDATE_ROOM_BEFORE_UPDATE
+BEFORE UPDATE ON TICKET
+FOR EACH ROW
+BEGIN
+    DECLARE vMaPhongSuat VARCHAR(10);
+    DECLARE vMaPhongGhe VARCHAR(10);
+
+    SELECT MaPhong INTO vMaPhongSuat
+    FROM SHOWTIME
+    WHERE MaSuat = NEW.MaSuat;
+
+    SELECT MaPhong INTO vMaPhongGhe
+    FROM SEAT
+    WHERE MaGhe = NEW.MaGhe;
+
+    IF vMaPhongSuat IS NULL OR vMaPhongGhe IS NULL THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'MaSuat hoac MaGhe khong ton tai.';
+    END IF;
+
+    IF vMaPhongSuat <> vMaPhongGhe THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Ghe khong thuoc phong cua suat chieu.';
+    END IF;
+END$$
+
+DELIMITER ;
+
+INSERT INTO MOVIE (MaPhim, TenPhim, TheLoai, ThoiLuong, NgayKhoiChieu, MoTa) VALUES
+('PH001', 'Avengers Endgame', 'Hanh dong, Vien tuong', 181, '2019-04-26', 'Bom tan Marvel ve cuoc chien cuoi cung.'),
+('PH002', 'Dune Part Two', 'Vien tuong', 166, '2024-03-01', 'Hanh trinh cua Paul Atreides.'),
+('PH003', 'Lat Mat 7', 'Tinh cam, Gia dinh', 145, '2024-04-26', 'Phim Viet Nam ve tinh than gia dinh.');
+
+INSERT INTO ROOM (MaPhong, TenPhong, LoaiPhong, SucChua) VALUES
+('P01', 'Phong 1', '2D', 80),
+('P02', 'Phong 2', '3D', 60);
+
+INSERT INTO SEAT (MaGhe, MaPhong, HangGhe, SoGhe) VALUES
+('G001', 'P01', 'A', 1),
+('G002', 'P01', 'A', 2),
+('G003', 'P01', 'A', 3),
+('G004', 'P01', 'B', 1),
+('G005', 'P02', 'A', 1),
+('G006', 'P02', 'A', 2),
+('G007', 'P02', 'B', 1);
+
+INSERT INTO SHOWTIME (MaSuat, MaPhim, MaPhong, ThoiGianBatDau, ThoiGianKetThuc) VALUES
+('S001', 'PH001', 'P01', '2026-04-25 18:00:00', '2026-04-25 21:01:00'),
+('S002', 'PH002', 'P02', '2026-04-25 19:30:00', '2026-04-25 22:16:00'),
+('S003', 'PH003', 'P01', '2026-04-26 20:00:00', '2026-04-26 22:25:00');
+
+INSERT INTO CUSTOMER (MaKH, HoTen, SoDienThoai, Email) VALUES
+('KH001', 'Nguyen Van A', '0901234567', 'nva@example.com'),
+('KH002', 'Tran Thi B', '0912345678', 'ttb@example.com'),
+('KH003', 'Le Hoang C', '0923456789', 'lhc@example.com');
+
+INSERT INTO TICKET (MaVe, MaKH, MaSuat, MaGhe, NgayDat, TrangThai, GiaVe) VALUES
+('VE001', 'KH001', 'S001', 'G001', '2026-04-22 20:15:00', 'DaThanhToan', 95000),
+('VE002', 'KH002', 'S001', 'G002', '2026-04-22 20:20:00', 'DaThanhToan', 95000),
+('VE003', 'KH003', 'S002', 'G005', '2026-04-22 20:30:00', 'DaThanhToan', 120000);
+
+INSERT INTO PAYMENT (MaThanhToan, MaVe, PhuongThuc, ThoiGianThanhToan) VALUES
+('TT001', 'VE001', 'ChuyenKhoan', '2026-04-22 20:16:00'),
+('TT002', 'VE002', 'TienMat', '2026-04-22 20:21:00'),
+('TT003', 'VE003', 'ViDienTu', '2026-04-22 20:31:00');
+
+-- Quick verification
+SELECT 'MOVIE' AS Bang, COUNT(*) AS SoDong FROM MOVIE
+UNION ALL
+SELECT 'ROOM', COUNT(*) FROM ROOM
+UNION ALL
+SELECT 'SEAT', COUNT(*) FROM SEAT
+UNION ALL
+SELECT 'SHOWTIME', COUNT(*) FROM SHOWTIME
+UNION ALL
+SELECT 'CUSTOMER', COUNT(*) FROM CUSTOMER
+UNION ALL
+SELECT 'TICKET', COUNT(*) FROM TICKET
+UNION ALL
+SELECT 'PAYMENT', COUNT(*) FROM PAYMENT;

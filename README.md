@@ -1,22 +1,25 @@
-# MySQL TKCSDL - Quan Ly Rap Chieu Phim
+# MySQL TKCSDL - Quản Lý Rạp Chiếu Phim
 
-## Gioi thieu
+## Giới thiệu
 
-Day la project cai dat co so du lieu **Quan Ly Rap Chieu Phim** tren **MySQL/XAMPP**.
+Đây là project cài đặt cơ sở dữ liệu **Quản Lý Rạp Chiếu Phim** trên **MySQL/MariaDB** và chạy được trên **XAMPP**.
 
-Mo hinh cuoi cung duoc lay tu file `CHUẨN HÓA.docx`, tuc la luoc do sau chuan hoa BCNF.
+Repo này chỉ giữ phần **MySQL**:
 
-Project nay tap trung vao:
+- script tạo database
+- script tạo bảng, khóa chính, khóa ngoại
+- ràng buộc `UNIQUE`, `CHECK`
+- trigger kiểm tra dữ liệu
+- tài liệu hướng dẫn tạo bảng và giải thích PK/FK
 
-- tao database tren MySQL
-- tao day du bang, khoa chinh, khoa ngoai, `UNIQUE`, `CHECK`
-- tao trigger kiem tra ghe thuoc dung phong cua suat chieu
-- chen du lieu mau
-- truy van kiem tra nhanh sau khi cai dat
+## Nội dung repo
 
-## Mo hinh cuoi
+- `quan_ly_rap_chieu_phim_mysql.sql`: script MySQL hoàn chỉnh
+- `HUONG_DAN_TAO_TABLE_MYSQL.md`: tài liệu học và giải thích chi tiết cách tạo bảng, PK, FK, ràng buộc và phần văn nói
 
-Database cuoi giu **7 bang**:
+## Mô hình cuối
+
+Database cuối gồm 7 bảng:
 
 - `MOVIE`
 - `ROOM`
@@ -26,72 +29,65 @@ Database cuoi giu **7 bang**:
 - `TICKET`
 - `PAYMENT`
 
-Khong su dung:
+Điểm quan trọng của mô hình cuối:
 
-- `PAYMENT_DETAIL`
+- không dùng `PAYMENT_DETAIL`
+- `PAYMENT` liên kết `1-1` với `TICKET` qua `MaVe`
+- `MaVe` trong `PAYMENT` được gắn `UNIQUE`
 
-Ly do:
+## Cài đặt trên XAMPP
 
-- quan he giua `TICKET` va `PAYMENT` la `1-1`
-- trong mo hinh cuoi, `PAYMENT` tham chieu `TICKET` thong qua `MaVe`
-- `MaVe` trong `PAYMENT` duoc gan `UNIQUE` de dam bao moi ve chi co 1 thanh toan
+### Cách 1: phpMyAdmin
 
-## Cau truc file
-
-- `quan_ly_rap_chieu_phim_mysql.sql`: script cai dat tren MySQL
-- `quan_ly_rap_chieu_phim_sqlserver.sql`: script cai dat tren SQL Server
-- `CAI_DAT_DTB_LEN_DBMS.md`: huong dan cai dat ngan gon
-- `HUONG_DAN_TAO_TABLE_MYSQL.md`: ghi chu chi tiet ve PK, FK, cach tao bang va van noi
-- `CHUẨN HÓA.docx`: nguon thiet ke cuoi cung de dung database
-- `MÔ HÌNH QUAN HỆ.docx`: mo hinh trung gian
-- `quy tắc mối quan hệ.docx`: giai thich cac moi quan he nghiep vu
-
-## Cach cai dat tren XAMPP
-
-### Cach 1: Dung phpMyAdmin
-
-1. Mo XAMPP Control Panel
+1. Mở `XAMPP Control Panel`
 2. Start `Apache`
 3. Start `MySQL`
-4. Truy cap `http://localhost/phpmyadmin`
-5. Chon tab `Import`
-6. Chon file `quan_ly_rap_chieu_phim_mysql.sql`
-7. Bam `Go`
+4. Mở `http://localhost/phpmyadmin`
+5. Chọn tab `Import`
+6. Chọn file `quan_ly_rap_chieu_phim_mysql.sql`
+7. Bấm `Go`
 
-### Cach 2: Dung command line
+### Cách 2: Command line
 
 ```powershell
 Get-Content -LiteralPath '.\quan_ly_rap_chieu_phim_mysql.sql' -Raw |
 & 'C:\xamp\mysql\bin\mysql.exe' -u root --default-character-set=utf8mb4
 ```
 
-## Database duoc tao
+## Database được tạo
 
-Ten database trong script:
+Tên database trong script là:
 
 ```sql
 QuanLyRapChieuPhimDB
 ```
 
-Tren MariaDB/XAMPP, ten thu muc du lieu co the hien o dang chu thuong:
+Trên MariaDB/XAMPP, tên thư mục dữ liệu có thể hiển thị ở dạng chữ thường:
 
 ```text
 quanlyrapchieuphimdb
 ```
 
-## Du lieu mau mac dinh
+## Dữ liệu mẫu mặc định
 
-Sau khi chay script, se co san:
+Sau khi chạy script sẽ có:
 
 - 3 phim
-- 2 phong
-- 7 ghe
-- 3 suat chieu
-- 3 khach hang
-- 3 ve
-- 3 thanh toan
+- 2 phòng
+- 7 ghế
+- 3 suất chiếu
+- 3 khách hàng
+- 3 vé
+- 3 thanh toán
 
-## Truy van kiem tra nhanh
+## Ràng buộc quan trọng
+
+- `SEAT`: `UNIQUE(MaPhong, HangGhe, SoGhe)`
+- `TICKET`: `UNIQUE(MaSuat, MaGhe)`
+- `PAYMENT`: `UNIQUE(MaVe)`
+- trigger kiểm tra ghế phải thuộc đúng phòng của suất chiếu
+
+## Truy vấn kiểm tra nhanh
 
 ```sql
 SELECT * FROM MOVIE;
@@ -103,7 +99,7 @@ SELECT * FROM TICKET;
 SELECT * FROM PAYMENT;
 ```
 
-Kiem tra lien ket ve va thanh toan:
+Kiểm tra liên kết vé và thanh toán:
 
 ```sql
 SELECT
@@ -120,28 +116,8 @@ JOIN MOVIE m ON m.MaPhim = st.MaPhim
 LEFT JOIN PAYMENT p ON p.MaVe = t.MaVe;
 ```
 
-## Rang buoc quan trong
+## Ghi chú
 
-- `SEAT`: `UNIQUE(MaPhong, HangGhe, SoGhe)`
-- `TICKET`: `UNIQUE(MaSuat, MaGhe)`
-- `PAYMENT`: `UNIQUE(MaVe)`
-- Trigger kiem tra `MaGhe` phai thuoc dung `MaPhong` cua `MaSuat`
-
-## Nguon thiet ke
-
-Project nay bam vao luoc do cuoi cung sau chuan hoa BCNF trong:
-
-- `CHUẨN HÓA.docx`
-
-Neu chi lam phan **database cuoi**, day la file can bam vao de:
-
-- chot bang nao duoc giu
-- chot PK va FK
-- chot rang buoc `UNIQUE`
-- loai bo `PAYMENT_DETAIL`
-
-## Ghi chu
-
-- Project phu hop de nop bai thuc hanh TKCSDL
-- Script MySQL co the chay tren XAMPP/MariaDB
-- Neu lop hoc dung SQL Server thi su dung file `quan_ly_rap_chieu_phim_sqlserver.sql`
+- Repo này chỉ giữ phần MySQL
+- Script phù hợp để nộp bài thực hành TKCSDL trên MySQL/XAMPP
+- Nếu cần học cách giải thích cấu trúc bảng, xem `HUONG_DAN_TAO_TABLE_MYSQL.md`
